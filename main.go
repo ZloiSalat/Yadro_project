@@ -52,6 +52,7 @@ func ReadCliCommands() []string {
 }
 
 func main() {
+
 	words := ReadCliCommands()
 	for _, word := range stemmedWords(words) {
 		fmt.Println(word)
