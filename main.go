@@ -3,8 +3,10 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/kljensen/snowball/english"
 	"strings"
+	"unicode"
+
+	"github.com/kljensen/snowball/english"
 )
 
 func stemWord(s string) string {
@@ -12,14 +14,12 @@ func stemWord(s string) string {
 }
 
 func isNormalized(s string) bool {
-	if !english.IsStopWord(s) && !strings.Contains(s, "'") {
-		return true
-	}
-	return false
+	return !english.IsStopWord(s) && !strings.Contains(s, "'")
+
 }
 
 func stemmedWords(s []string) []string {
-	var m = make(map[string]bool)
+	m := make(map[string]bool)
 	var word string
 	var finalWords []string
 	for i := 0; i < len(s); i++ {
@@ -36,8 +36,7 @@ func stemmedWords(s []string) []string {
 }
 
 func stringSplitter(s rune) bool {
-	switch s {
-	case ' ', ':', ',', ';', '!', '?':
+	if !unicode.IsLetter(s) {
 		return true
 	}
 	return false
