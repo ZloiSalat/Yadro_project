@@ -2,3 +2,4 @@ xkcd:
   source_url: https://xkcd.com
   db_file: db.json
   db_size: 10
+  end_comics: 20

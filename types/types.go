@@ -1,6 +1,10 @@
 package types
 
-type Num struct {
-	URL      string   `json:"url"`
-	Keywords []string `json:"keywords"`
+type Data struct {
+	Comics map[int]Comics
+}
+
+type Comics struct {
+	URL      string `json:"img"`
+	Keywords string `json:"alt"`
 }
