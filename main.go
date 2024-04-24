@@ -1,60 +1,41 @@
 package main
 
 import (
-	"flag"
+	"YadroProject/pkg"
 	"fmt"
-	"strings"
-	"unicode"
-
-	"github.com/kljensen/snowball/english"
+	"log"
+	"os"
+	"os/signal"
+	"syscall"
 )
-
-func stemWord(s string) string {
-	return english.Stem(s, true)
-}
-
-func isNormalized(s string) bool {
-	return !english.IsStopWord(s) && !strings.Contains(s, "'")
-
-}
-
-func stemmedWords(s []string) []string {
-	m := make(map[string]bool)
-	var word string
-	var finalWords []string
-	for i := 0; i < len(s); i++ {
-		word = stemWord(s[i])
-		if !isNormalized(word) || m[word] {
-			continue
-		}
-		m[word] = true
-		finalWords = append(finalWords, word)
-
-	}
-
-	return finalWords
-}
-
-func stringSplitter(s rune) bool {
-	if !unicode.IsLetter(s) {
-		return true
-	}
-	return false
-}
-
-func ReadCliCommands() []string {
-	var sentence string
-	flag.StringVar(&sentence, "s", "", "Write down the sentence")
-	flag.Parse()
-
-	return strings.FieldsFunc(sentence, stringSplitter)
-}
 
 func main() {
 
-	words := ReadCliCommands()
-	for _, word := range stemmedWords(words) {
-		fmt.Println(word)
+	cmd := pkg.NewFlagParser()
+	stem := pkg.NewStemmer()
+	cfg := pkg.NewConfig("config.yaml")
+	store, err := pkg.NewDB(cfg)
+	if err != nil {
+		fmt.Errorf("Store init error", err)
 	}
+
+	a, err := pkg.NewAPIClient(store, *stem, cfg, cmd)
+	if err != nil {
+		log.Panicln(err)
+	}
+
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		<-signals
+		// Сохраняем данные в базу данных перед завершением
+		if err := store.Save(); err != nil {
+			log.Printf("Error saving data to database: %v", err)
+		}
+		os.Exit(1)
+	}()
+
+	a.Run()
 
 }
