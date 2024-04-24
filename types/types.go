@@ -5,6 +5,7 @@ type Data struct {
 }
 
 type Comics struct {
-	URL      string `json:"img"`
-	Keywords string `json:"alt"`
+	URL         string `json:"img"`
+	Keywords    []string
+	PreKeywords string `json:"alt"`
 }

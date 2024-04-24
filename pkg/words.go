@@ -31,8 +31,9 @@ func isNormalized(s string) bool {
 func (stm *Stemmer) stemmedWords(s types.Comics) []string {
 	m := make(map[string]bool)
 	var word string
-	var finalWords []string
-	words := strings.FieldsFunc(s.Keywords, stringSplitter)
+	var finalWords, words []string
+	words = strings.FieldsFunc(s.PreKeywords, stringSplitter)
+
 	for i := 0; i < len(words); i++ {
 		word = stemWord(words[i])
 		if !isNormalized(word) || m[word] {

@@ -8,10 +8,11 @@ import (
 
 type Config struct {
 	Xkcd struct {
-		Source     string `yaml:"source_url"`
-		DbFile     string `yaml:"db_file"`
-		DbSize     int    `yaml:"db_size"`
-		End_comics int    `yaml:"end_comics"`
+		Source    string `yaml:"source_url"`
+		DbFile    string `yaml:"db_file"`
+		DbSize    int    `yaml:"db_size"`
+		EndComics int    `yaml:"end_comics"`
+		Parallel  int    `yaml:"parallel"`
 	} `yaml:"xkcd"`
 }
 

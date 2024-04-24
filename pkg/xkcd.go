@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 )
 
 type APIClient struct {
@@ -13,7 +12,6 @@ type APIClient struct {
 	stem  Stemmer
 	cfg   Config
 	cmd   *Parser
-	types types.Data
 }
 
 func NewAPIClient(store Storage, stem Stemmer, cfg Config, cmd *Parser) (*APIClient, error) {
@@ -22,9 +20,6 @@ func NewAPIClient(store Storage, stem Stemmer, cfg Config, cmd *Parser) (*APICli
 		stem:  stem,
 		cfg:   cfg,
 		cmd:   cmd,
-		types: types.Data{
-			Comics: make(map[int]types.Comics),
-		},
 	}, nil
 }
 
@@ -39,53 +34,81 @@ func (a *APIClient) GetComicsByID(id int) (types.Comics, error) {
 		return types.Comics{}, fmt.Errorf("status code not OK: %d", resp.StatusCode)
 	}
 
-	var d types.Comics
-	if err := json.NewDecoder(resp.Body).Decode(&d); err != nil {
+	newData := new(types.Comics)
+
+	if err := json.NewDecoder(resp.Body).Decode(&newData); err != nil {
 		return types.Comics{}, err
 	}
 
-	return d, nil
+	return *newData, nil
 }
 
 func (a *APIClient) Run() error {
 
 	c, _ := a.cmd.ParseFlag()
-	if !c {
-		fmt.Printf("Config: DBSize %v, Source %v, DBFile %v, End_comics %v ", a.cfg.Xkcd.DbSize, a.cfg.Xkcd.Source, a.cfg.Xkcd.DbFile, a.cfg.Xkcd.End_comics)
+	if c {
+		fmt.Printf("Config: DBSize %v, Source %v, DBFile %v, End_comics %v, Parallel %v\n", a.cfg.Xkcd.DbSize, a.cfg.Xkcd.Source, a.cfg.Xkcd.DbFile, a.cfg.Xkcd.EndComics, a.cfg.Xkcd.Parallel)
 		return nil
 	}
-	for i := 100; i < 100+a.cfg.Xkcd.End_comics; i++ {
-		data := make(map[int]interface{})
 
-		if err := json.Unmarshal([]byte(a.cfg.Xkcd.DbFile), &data); err != nil {
-			fmt.Println("Ошибка разбора JSON:", err)
+	// Создаем канал для ограничения параллельных запросов
+	semaphore := make(chan struct{}, a.cfg.Xkcd.Parallel)
+
+	// Канал для передачи ошибок из горутин
+	errCh := make(chan error)
+
+	// Канал для сигнала о завершении
+	done := make(chan struct{})
+
+	// Запускаем цикл в горутине для параллельной обработки
+	go func() {
+		defer close(done)
+		for i := 100; i < 100+a.cfg.Xkcd.EndComics; i++ {
+			// Получаем токен из канала семафора
+			semaphore <- struct{}{}
+			go func(id int) {
+				defer func() {
+					// Освобождаем токен семафора
+					<-semaphore
+				}()
+
+				comics, err := a.GetComicsByID(id)
+				if err != nil {
+					errCh <- fmt.Errorf("error get comics from http: %w", err)
+					return
+				}
+
+				words := a.stem.stemmedWords(comics)
+
+				d := types.Comics{
+					Keywords:    words,
+					URL:         comics.URL,
+					PreKeywords: "",
+				}
+
+				// Добавляем данные в хранилище
+				a.store.Add(d, id)
+			}(i)
+		}
+	}()
+
+	// Ожидаем завершения всех горутин
+	go func() {
+		<-done
+		close(errCh)
+	}()
+
+	// Ждем, пока все горутины завершат выполнение или произойдет ошибка
+	for err := range errCh {
+		if err != nil {
 			return err
 		}
-
-		if _, ok := data[i]; !ok {
-			continue
-		}
-		comics, err := a.GetComicsByID(i)
-		if err != nil {
-			return fmt.Errorf("error get comics from database: %w", err)
-		}
-		fmt.Println(comics)
-
-		words := a.stem.stemmedWords(comics)
-
-		for i, word := range words {
-			words[i] = ` ` + word + ` `
-		}
-
-		result := strings.Join(words, ",")
-
-		d := types.Comics{
-			Keywords: result,
-			URL:      comics.URL,
-		}
-
-		a.types.Comics[i] = d
-		a.store.Save(a.types.Comics)
 	}
+
+	// Сохраняем данные после завершения обработки всех горутин
+	if err := a.store.Save(); err != nil {
+		return err
+	}
+
 	return nil
 }
